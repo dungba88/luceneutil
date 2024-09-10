@@ -48,6 +48,8 @@ import org.apache.lucene.codecs.KnnVectorsReader;
 import org.apache.lucene.codecs.lucene912.Lucene912Codec;
 import org.apache.lucene.codecs.lucene99.Lucene99HnswVectorsFormat;
 import org.apache.lucene.codecs.lucene99.Lucene99HnswScalarQuantizedVectorsFormat;
+import org.apache.lucene.codecs.lucene912.Lucene912BinaryQuantizedVectorsFormat;
+import org.apache.lucene.codecs.lucene912.Lucene912HnswBinaryQuantizedVectorsFormat;
 import org.apache.lucene.codecs.lucene99.Lucene99HnswVectorsReader;
 import org.apache.lucene.codecs.perfield.PerFieldKnnVectorsFormat;
 import org.apache.lucene.document.Document;
@@ -130,6 +132,7 @@ public class KnnGraphTester {
   private float selectivity;
   private boolean prefilter;
   private boolean randomCommits;
+  private float overSample;
 
   private KnnGraphTester() {
     // set defaults
@@ -143,6 +146,7 @@ public class KnnGraphTester {
     similarityFunction = VectorSimilarityFunction.DOT_PRODUCT;
     vectorEncoding = VectorEncoding.FLOAT32;
     selectivity = 1f;
+    overSample = 1f;
     prefilter = false;
     randomCommits = false;
     quantizeBits = 7;
@@ -307,6 +311,15 @@ public class KnnGraphTester {
           selectivity = Float.parseFloat(args[++iarg]);
           if (selectivity <= 0 || selectivity >= 1) {
             throw new IllegalArgumentException("-filterSelectivity must be between 0 and 1");
+          }
+          break;
+        case "-overSample":
+          if (iarg == args.length - 1) {
+            throw new IllegalArgumentException("-overSample requires a following float");
+          }
+          overSample = Float.parseFloat(args[++iarg]);
+          if (overSample < 1) {
+            throw new IllegalArgumentException("-overSample must be >= 1");
           }
           break;
         case "-quiet":
@@ -513,9 +526,11 @@ public class KnnGraphTester {
         targetReaderByte = b;
       }
       if (quiet == false) {
-        System.out.println("running " + numIters + " targets; topK=" + topK + ", fanout=" + fanout);
+        System.out.println("running " + numIters + " targets; topK=" + topK + ", fanout=" + fanout + ", overSample=" + overSample);
       }
       long start;
+      int topK = (overSample > 1) ? (int) (this.topK * overSample) : this.topK;
+      int fanout = (overSample > 1) ? (int) (this.fanout * overSample) : this.fanout;
       ThreadMXBean bean = ManagementFactory.getThreadMXBean();
       long cpuTimeStartNs;
       try (Directory dir = FSDirectory.open(indexPath);
@@ -629,7 +644,7 @@ public class KnnGraphTester {
       }
       System.out.printf(
           Locale.ROOT,
-          "SUMMARY: %5.3f\t%5.2f\t%d\t%d\t%d\t%d\t%s\t%d\t%d\t%.2f\t%s\n",
+          "SUMMARY: %5.3f\t%5.2f\t%d\t%d\t%d\t%d\t%s\t%5.2f\t%d\t%d\t%.2f\t%s\n",
           recall,
           totalCpuTime / (float) numIters,
           numDocs,
@@ -637,6 +652,7 @@ public class KnnGraphTester {
           maxConn,
           beamWidth,
           quantizeDesc,
+          overSample,
           totalVisited,
           reindexTimeMsec,
           selectivity,
@@ -835,18 +851,26 @@ public class KnnGraphTester {
       return new Lucene912Codec() {
         @Override
         public KnnVectorsFormat getKnnVectorsFormatForField(String field) {
-          return quantize ?
-              new Lucene99HnswScalarQuantizedVectorsFormat(maxConn, beamWidth, numMergeWorker, quantizeBits, quantizeCompress, null, null) :
-              new Lucene99HnswVectorsFormat(maxConn, beamWidth, numMergeWorker, null);
+          if (quantize && quantizeBits != 32) {
+            if (quantizeBits == 1) {
+              return new Lucene912HnswBinaryQuantizedVectorsFormat(maxConn, beamWidth);
+            }
+            return new Lucene99HnswScalarQuantizedVectorsFormat(maxConn, beamWidth, numMergeWorker, quantizeBits, quantizeCompress, 0f, null);
+          }
+          return new Lucene99HnswVectorsFormat(maxConn, beamWidth, numMergeWorker, null);
         }
       };
     } else {
       return new Lucene912Codec() {
         @Override
         public KnnVectorsFormat getKnnVectorsFormatForField(String field) {
-          return quantize ?
-              new Lucene99HnswScalarQuantizedVectorsFormat(maxConn, beamWidth, numMergeWorker, quantizeBits, quantizeCompress, null, exec) :
-              new Lucene99HnswVectorsFormat(maxConn, beamWidth, numMergeWorker, exec);
+          if (quantize) {
+            if (quantizeBits == 1 && quantizeBits != 32) {
+              return new Lucene912HnswBinaryQuantizedVectorsFormat(maxConn, beamWidth, numMergeWorker, Lucene912BinaryQuantizedVectorsFormat.DEFAULT_NUM_VECTORS_PER_CLUSTER, exec);
+            }
+            return new Lucene99HnswScalarQuantizedVectorsFormat(maxConn, beamWidth, numMergeWorker, quantizeBits, quantizeCompress, 0f, exec);
+          }
+          return new Lucene99HnswVectorsFormat(maxConn, beamWidth, numMergeWorker, exec);
         }
       };
     }

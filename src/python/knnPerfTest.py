@@ -38,7 +38,7 @@ PARAMS = {
     #'ndoc': (10000, 100000, 1000000),
     #'ndoc': (10000, 100000, 200000, 500000),
     #'ndoc': (10000, 100000, 200000, 500000),
-    'ndoc': (250_000,),
+    'ndoc': (100_000,),
     #'ndoc': (100000,),
     #'maxConn': (32, 64, 96),
     #'maxConn': (64, ),
@@ -49,13 +49,12 @@ PARAMS = {
     #'fanout': (20, 100, 250)
     'fanout': (20,),
     #'quantize': None,
-    'quantizeBits': (4, 7, 8),
-    'numMergeWorker': (12,),
-    'numMergeThread': (4,),
     'encoding': ('float32',),
     # 'metric': ('angular',),  # default is angular (dot_product)
     #'quantize': (True,),
-    #'fanout': (0,),
+    'quantizeBits': (1, 4, 7,),
+    'overSample': (1,2,),
+    'fanout': (0,),
     #'topK': (10,),
     #'niter': (10,),
 }
@@ -93,9 +92,10 @@ def run_knn_benchmark(checkout, values):
     #query_vectors = '/d/electronics_query_vectors.bin'
 
     # Cohere dataset
-    dim = 768
-    doc_vectors = '%s/data/cohere-wikipedia-768.vec' % constants.BASE_DIR
-    query_vectors = '%s/data/cohere-wikipedia-queries-768.vec' % constants.BASE_DIR
+    dim = 1024
+    doc_vectors = '%s/util/wiki1024en.train' % constants.BASE_DIR
+    query_vectors = '%s/util/wiki1024en.test' % constants.BASE_DIR
+    jfr = f"-agentpath:/Users/benjamintrent/Downloads/async-profiler-2.9-macos/build/libasyncProfiler.so=start,event=cpu,file=bbq-{dim}-10000-cpu.jfr"
     cp = benchUtil.classPathToString(benchUtil.getClassPath(checkout))
     cmd = constants.JAVA_EXE.split(' ') + ['-cp', cp,
            '--add-modules', 'jdk.incubator.vector',
@@ -127,12 +127,14 @@ def run_knn_benchmark(checkout, values):
         this_cmd = cmd + args + [
             '-dim', str(dim),
             '-docs', doc_vectors,
-            '-reindex',
+            #'-reindex',
+            #'-forceMerge',
             '-search', query_vectors,
-            #'-metric', 'euclidean',
+            '-metric', 'angular',
+            '-quiet',
+            '-quantize'
             # '-numMergeThread', '8', '-numMergeWorker', '8',
-            # '-forceMerge',
-            '-quiet']
+            ]
         print(f'  cmd: {this_cmd}')
         job = subprocess.Popen(this_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding='utf-8')
         re_summary = re.compile(r'^SUMMARY: (.*?)$', re.MULTILINE)
@@ -152,7 +154,7 @@ def run_knn_benchmark(checkout, values):
             raise RuntimeError(f'command failed with exit {job.returncode}')
         all_results.append(summary)
     print('\nResults:')
-    print("recall\tlatency\tnDoc\tfanout\tmaxConn\tbeamWidth\tquantized\tvisited\tindex ms\tselectivity\tfilterType")
+    print("recall\tlatency\tnDoc\tfanout\tm\tefCon\tbits\toversample\tvisited\tindex ms\tselectivity\tfilterType")
     for result in all_results:
         print(result)
     
