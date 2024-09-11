@@ -38,22 +38,21 @@ PARAMS = {
     #'ndoc': (10000, 100000, 1000000),
     #'ndoc': (10000, 100000, 200000, 500000),
     #'ndoc': (10000, 100000, 200000, 500000),
-    'ndoc': (100_000,),
+    'ndoc': (25_000,),
     #'ndoc': (100000,),
     #'maxConn': (32, 64, 96),
     #'maxConn': (64, ),
-    'maxConn': (32, ),
+    'maxConn': (16, ),
     #'beamWidthIndex': (250, 500),
     #'beamWidthIndex': (250, ),
-    'beamWidthIndex': (50, ),
+    'beamWidthIndex': (100, ),
     #'fanout': (20, 100, 250)
-    'fanout': (20,),
     #'quantize': None,
     'encoding': ('float32',),
     # 'metric': ('angular',),  # default is angular (dot_product)
     #'quantize': (True,),
     'quantizeBits': (1, 4, 7,),
-    'overSample': (1,2,),
+    #'overSample': (1,1.25, 1.5, 2,),
     'fanout': (0,),
     #'topK': (10,),
     #'niter': (10,),
@@ -92,12 +91,13 @@ def run_knn_benchmark(checkout, values):
     #query_vectors = '/d/electronics_query_vectors.bin'
 
     # Cohere dataset
-    dim = 1024
-    doc_vectors = '%s/util/wiki1024en.train' % constants.BASE_DIR
-    query_vectors = '%s/util/wiki1024en.test' % constants.BASE_DIR
+    dim = 200
+    doc_vectors = '%s/data/glove-200-angular.train' % constants.BASE_DIR
+    query_vectors = '%s/data/glove-200-angular.test' % constants.BASE_DIR
     jfr = f"-agentpath:/Users/benjamintrent/Downloads/async-profiler-2.9-macos/build/libasyncProfiler.so=start,event=cpu,file=bbq-{dim}-10000-cpu.jfr"
     cp = benchUtil.classPathToString(benchUtil.getClassPath(checkout))
     cmd = constants.JAVA_EXE.split(' ') + ['-cp', cp,
+                                           '-Xmx8g',
            '--add-modules', 'jdk.incubator.vector',
            '--enable-native-access=ALL-UNNAMED',
            'knn.KnnGraphTester']
@@ -127,13 +127,13 @@ def run_knn_benchmark(checkout, values):
         this_cmd = cmd + args + [
             '-dim', str(dim),
             '-docs', doc_vectors,
-            #'-reindex',
-            #'-forceMerge',
+            '-reindex',
+            '-forceMerge',
             '-search', query_vectors,
-            '-metric', 'angular',
+            '-metric', 'cosine',
             '-quiet',
-            '-quantize'
-            # '-numMergeThread', '8', '-numMergeWorker', '8',
+            '-quantize',
+            '-numMergeThread', '8', '-numMergeWorker', '8',
             ]
         print(f'  cmd: {this_cmd}')
         job = subprocess.Popen(this_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding='utf-8')
