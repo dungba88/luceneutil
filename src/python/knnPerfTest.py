@@ -38,24 +38,24 @@ PARAMS = {
     #'ndoc': (10000, 100000, 1000000),
     #'ndoc': (10000, 100000, 200000, 500000),
     #'ndoc': (10000, 100000, 200000, 500000),
-    'ndoc': (25_000,),
+    'ndoc': (300_000,),
     #'ndoc': (100000,),
     #'maxConn': (32, 64, 96),
     #'maxConn': (64, ),
     'maxConn': (16, ),
     #'beamWidthIndex': (250, 500),
     #'beamWidthIndex': (250, ),
-    'beamWidthIndex': (100, ),
+    'beamWidthIndex': (100, 150, 200, 250, 500),
     #'fanout': (20, 100, 250)
     #'quantize': None,
     'encoding': ('float32',),
     # 'metric': ('angular',),  # default is angular (dot_product)
     #'quantize': (True,),
-    'quantizeBits': (1, 4, 7,),
-    #'overSample': (1,1.25, 1.5, 2,),
-    'fanout': (0,),
+    'quantizeBits': (1, ),
+    'overSample': (1, 2, 3, 4, 5, 10),
+    #'fanout': (0,100,200),
     #'topK': (10,),
-    #'niter': (10,),
+    'niter': (100,),
 }
 
 def advance(ix, values):
@@ -91,13 +91,13 @@ def run_knn_benchmark(checkout, values):
     #query_vectors = '/d/electronics_query_vectors.bin'
 
     # Cohere dataset
-    dim = 200
-    doc_vectors = '%s/data/glove-200-angular.train' % constants.BASE_DIR
-    query_vectors = '%s/data/glove-200-angular.test' % constants.BASE_DIR
+    dim = 768
+    doc_vectors = '%s/util/wiki768.train' % constants.BASE_DIR
+    query_vectors = '%s/util/wiki768.test' % constants.BASE_DIR
     jfr = f"-agentpath:/Users/benjamintrent/Downloads/async-profiler-2.9-macos/build/libasyncProfiler.so=start,event=cpu,file=bbq-{dim}-10000-cpu.jfr"
     cp = benchUtil.classPathToString(benchUtil.getClassPath(checkout))
     cmd = constants.JAVA_EXE.split(' ') + ['-cp', cp,
-                                           '-Xmx8g',
+                                           '-Xmx16g', '-Xms16g',
            '--add-modules', 'jdk.incubator.vector',
            '--enable-native-access=ALL-UNNAMED',
            'knn.KnnGraphTester']
@@ -127,10 +127,10 @@ def run_knn_benchmark(checkout, values):
         this_cmd = cmd + args + [
             '-dim', str(dim),
             '-docs', doc_vectors,
-            '-reindex',
-            '-forceMerge',
+            #'-reindex',
+            #'-forceMerge',
             '-search', query_vectors,
-            '-metric', 'cosine',
+            '-metric', 'mip',
             '-quiet',
             '-quantize',
             '-numMergeThread', '8', '-numMergeWorker', '8',

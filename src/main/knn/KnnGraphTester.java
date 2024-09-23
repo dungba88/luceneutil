@@ -866,7 +866,7 @@ public class KnnGraphTester {
         public KnnVectorsFormat getKnnVectorsFormatForField(String field) {
           if (quantize) {
             if (quantizeBits == 1 && quantizeBits != 32) {
-              return new Lucene912HnswBinaryQuantizedVectorsFormat(maxConn, beamWidth, numMergeWorker, Lucene912BinaryQuantizedVectorsFormat.DEFAULT_NUM_VECTORS_PER_CLUSTER, exec);
+              return new Lucene912HnswBinaryQuantizedVectorsFormat(maxConn, beamWidth, numMergeWorker, exec);
             }
             return new Lucene99HnswScalarQuantizedVectorsFormat(maxConn, beamWidth, numMergeWorker, quantizeBits, quantizeCompress, 0f, exec);
           }
