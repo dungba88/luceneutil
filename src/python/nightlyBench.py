@@ -151,8 +151,13 @@ def buildIndex(r, runLogDir, desc, index, logFile):
 
     newLogFileName = '%s/%s' % (runLogDir, logFile)
     if REAL:
-        print('Move log to %s' % newLogFileName)
+        print('move log to %s' % newLogFileName)
         shutil.move(fullLogFile, newLogFileName)
+
+    newVmstatLogFileName = f'{runLogDir}/{logFile.replace(".log", ".vmstat.log")}'
+    if REAL:
+        print('move vmstat log to %s' % newVmstatLogFileName)
+        shutil.move(f'{constants.LOGS_DIR}/nightly.vmstat.log', newVmstatLogFileName)
 
     s = open(newLogFileName).read()
     bytesIndexed = int(reBytesIndexed.search(s).group(1))
@@ -332,20 +337,22 @@ def run():
         luceneRev = os.popen('git rev-parse HEAD').read().strip()
         print(f'LUCENE rev is {luceneRev}')
 
-        lastLuceneRev, lastLuceneUtilRev, lastLogFile = findLastSuccessfulGitHashes()
-        print(f'last successfull Lucene rev {lastLuceneRev}, luceneutil rev {lastLuceneUtilRev}')
+        lastRevs = findLastSuccessfulGitHashes()
+        if lastRevs is not None:
+            lastLuceneRev, lastLuceneUtilRev, lastLogFile = lastRevs
+            print(f'last successfull Lucene rev {lastLuceneRev}, luceneutil rev {lastLuceneUtilRev}')
 
-        # parse git log to see if there were any commits requesting regold
-        command = ['git', 'log', f'{lastLuceneRev}^..{luceneRev}']
-        print(f'run {command}')
-        result = subprocess.run(command, check=True, capture_output=True)
+            # parse git log to see if there were any commits requesting regold
+            command = ['git', 'log', f'{lastLuceneRev}^..{luceneRev}']
+            print(f'run {command}')
+            result = subprocess.run(command, check=True, capture_output=True)
 
-        regold_string = '// nightly-benchmarks-results-changed //'
-        if regold_string in result.stdout.decode('utf-8'):
-            print(f'Saw commit with "{regold_string}" comment from {" ".join(command)}; will regold results files')
-            DO_RESET = True
-        else:
-            print(f'No commit message asking for regold of results files')
+            regold_string = '// nightly-benchmarks-results-changed //'
+            if regold_string in result.stdout.decode('utf-8'):
+                print(f'Saw commit with "{regold_string}" comment from {" ".join(command)}; will regold results files')
+                DO_RESET = True
+            else:
+                print(f'No commit message asking for regold of results files')
 
         os.chdir('%s/%s' % (constants.BASE_DIR, NIGHTLY_DIR))
         runCommand('%s clean -xfd' % constants.GIT_EXE)
@@ -630,6 +637,25 @@ def run():
                                                     'prev', 'now',
                                                     writer=output.append)
 
+    # generate vmstat pretties
+    print('generate vmstat pretties')
+    timestampLogDir = f'{constants.NIGHTLY_REPORTS_DIR}/{timeStamp}'
+    os.mkdir(timestampLogDir)
+    os.chdir(timestampLogDir)
+    with open('index.html', 'w') as indexOut:
+      indexOut.write('<h2>vmstat charts for indexing tasks</h2>\n')
+      for vmstatLogFileName in glob.glob(f'{runLogDir}/*.vmstat.log'):
+        prefix = os.path.split(vmstatLogFileName)[1][:-11]
+        indexOut.write(f'<a href={prefix}>{prefix}</a><br>\n')
+        # a new sub-directory per run since each vmstat generates a bunch of pretties
+        subDirName = f'{timestampLogDir}/{prefix}'
+        os.mkdir(subDirName)
+        print(f'  {subDirName}')
+        # TODO: optimize to single shared copy!
+        shutil.copy('/usr/share/gnuplot/6.0/js/gnuplot_svg.js', subDirName)
+        shutil.copy(f'{constants.BENCH_BASE_DIR}/src/vmstat/index.html.template', f'{subDirName}/index.html')
+        subprocess.check_call(f'gnuplot -c {constants.BENCH_BASE_DIR}/src/vmstat/vmstat.gpi {vmstatLogFileName} {prefix}', shell=True)
+
     with open('%s/%s.html' % (constants.NIGHTLY_REPORTS_DIR, timeStamp), 'w') as f:
         timeStamp2 = '%s %02d/%02d/%04d' % (start.strftime('%a'), start.month, start.day, start.year)
         w = f.write
@@ -651,6 +677,7 @@ def run():
         w('%s<br>' % javaVersion)
         w('Java command-line: %s<br>' % htmlEscape(constants.JAVA_COMMAND))
         w('Index: %s<br>' % fixedIndexAtClose)
+        w(f'See the <a href="{timeStamp}/index.html">perty vmstat charts</a>\n')
         w('<br><br><b>Search perf vs day before</b>\n')
         w(''.join(output))
         w('<br><br>')
@@ -1381,6 +1408,7 @@ def writeIndexHTML(searchChartData, days):
     writeOneLine(w, done, 'Or3Terms', 'Disjunction of 3 terms')
     writeOneLine(w, done, 'And3Terms', 'Conjunction of 3 terms')
     writeOneLine(w, done, 'OrHighRare', 'Disjunction of a very frequent term and a very rare term')
+    writeOneLine(w, done, 'OrMany', 'Disjunction of many terms')
 
     w('<br><br><b>CombinedFieldsQuery:</b>')
     writeOneLine(w, done, 'CombinedTerm', 'Combined high-freq')

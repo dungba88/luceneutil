@@ -1,5 +1,12 @@
 #!/usr/bin/env/python
 
+# TODO
+#   - hmm what is "normalized" boolean at KNN indexing time? -- COSINE similarity sets this to true
+#   - try turning diversity off -- faster forceMerge?  better recall?
+#   - why force merge 12X slower
+#   - why only one thread
+#   - report net concurrency utilized in the table
+
 import subprocess
 import sys
 import benchUtil
@@ -116,6 +123,10 @@ def run_knn_benchmark(checkout, values):
                         print(f'  -{p}={value}')
                         print(f'  -quantize')
                         args += ['-quantize']
+                elif type(value) is bool:
+                    if value:
+                        args += ['-' + p]
+                        print(f'  -{p}')
                 else:
                     print(f'  -{p}={value}')
                     pv[p] = value
@@ -127,14 +138,15 @@ def run_knn_benchmark(checkout, values):
         this_cmd = cmd + args + [
             '-dim', str(dim),
             '-docs', doc_vectors,
-            #'-reindex',
-            #'-forceMerge',
-            '-search', query_vectors,
-            '-metric', 'mip',
-            '-quiet',
-            '-quantize',
-            '-numMergeThread', '8', '-numMergeWorker', '8',
-            ]
+            '-reindex',
+            '-search-and-stats', query_vectors,
+            #'-metric', 'euclidean',
+            # '-parentJoin', parentJoin_meta_file,
+            # '-numMergeThread', '8', '-numMergeWorker', '8',
+            '-forceMerge',
+            #'-stats',
+            '-quiet'
+        ]
         print(f'  cmd: {this_cmd}')
         job = subprocess.Popen(this_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding='utf-8')
         re_summary = re.compile(r'^SUMMARY: (.*?)$', re.MULTILINE)
@@ -154,10 +166,40 @@ def run_knn_benchmark(checkout, values):
             raise RuntimeError(f'command failed with exit {job.returncode}')
         all_results.append(summary)
     print('\nResults:')
-    print("recall\tlatency\tnDoc\tfanout\tm\tefCon\tbits\toversample\tvisited\tindex ms\tselectivity\tfilterType")
-    for result in all_results:
-        print(result)
-    
+
+    header = 'recall\tlatency (ms)\tnDoc\ttopK\tfanout\tmaxConn\tbeamWidth\tquantized\tvisited\tindex s\tforce merge s\tnum segments\tindex size (MB)\tselectivity\tfilterType'
+
+    # crazy logic to make everything fixed width so rendering in fixed width font "aligns":
+    headers = header.split('\t')
+    num_columns = len(headers)
+    # print(f'{num_columns} columns')
+    max_by_col = [0] * num_columns
+
+    rows_to_print = [header] + all_results
+
+    # TODO: be more careful when we skip/show headers e.g. if some of the runs involve filtering,
+    # turn filterType/selectivity back on for all runs
+    skip_headers = {'selectivity', 'filterType', 'visited'}
+
+    if '-forceMerge' not in this_cmd:
+        skip_headers.add('force merge s')
+
+    skip_column_index = {headers.index(h) for h in skip_headers}
+
+    for row in rows_to_print:
+        by_column = row.split('\t')
+        if len(by_column) != num_columns:
+            raise RuntimeError(f'wrong number of columns: expected {num_columns} but got {len(by_column)} in "{row}"')
+        for i, s in enumerate(by_column):
+            max_by_col[i] = max(max_by_col[i], len(s))
+
+    row_fmt = '  '.join([f'%{max_by_col[i]}s' for i in range(num_columns) if i not in skip_column_index])
+    # print(f'using row format {row_fmt}')
+
+    for row in rows_to_print:
+        cols = row.split('\t')
+        cols = tuple(cols[x] for x in range(len(cols)) if x not in skip_column_index)
+        print(row_fmt % cols)
 
 
 run_knn_benchmark(LUCENE_CHECKOUT, PARAMS)

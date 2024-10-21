@@ -798,11 +798,11 @@ KNOWN_CHANGES = [
   ('2024-03-26',
    'Break point estimation when threshold exceeded https://github.com/apache/lucene/pull/13199',
    'Break point estimation when threshold exceeded https://github.com/apache/lucene/pull/13199'),
-   
+
   ('2024-04-01',
    '#11888: optimize terms dictionary lookups when all terms have the same suffix length, which helps primary key lookup for fixed-length fields',
    '#11888: optimize terms dictionary lookups when all terms have the same suffix length, which helps primary key lookup for fixed-length fields'),
-   
+
   ('2024-04-29',
    '#264: use Lucene defaults for ConcurrentMergeSchedular',
    '#264: use Lucene defaults for ConcurrentMergeSchedular'),
@@ -842,4 +842,33 @@ KNOWN_CHANGES = [
   ('2024-08-25',
    'Switch to 768 dimension Cohere vectors (from MPNet 768 dimensions)',
    'Switch to 768 dimension Cohere vectors (from MPNet 768 dimensions)'),
+
+  ('2024-08-28',
+   'Speed up advancing within a block https://github.com/apache/lucene/pull/13692',
+   'Speed up advancing within a block https://github.com/apache/lucene/pull/13692'),
+
+  ('2024-09-16',
+   'Revert: Speed up advancing within a block https://github.com/apache/lucene/pull/13692',
+   'Revert: Speed up advancing within a block https://github.com/apache/lucene/pull/13692'),
+
+  ('2024-10-03',
+   'Speedup GlobalHitsThresholdChecker a little https://github.com/apache/lucene/pull/13836',
+   'Speedup GlobalHitsThresholdChecker a little https://github.com/apache/lucene/pull/13836'),
+
+  ('2024-10-07',
+   'Speedup MaxScoreCache.computeMaxScore https://github.com/apache/lucene/pull/13865',
+   'Speedup MaxScoreCache.computeMaxScore https://github.com/apache/lucene/pull/13865'),
+
+  ('2024-10-09',
+   'Speedup OrderedIntervalsSource https://github.com/apache/lucene/pull/13871',
+   'Speedup OrderedIntervalsSource https://github.com/apache/lucene/pull/13871'),
+
+  ('2024-10-12',
+   'Use RandomAccessInput instead of seeking in Lucene90DocValuesProducer https://github.com/apache/lucene/pull/13894, Lazy initialize ForDeltaUtil and ForUtil in Lucene912PostingsReader https://github.com/apache/lucene/pull/13885',
+   'Use RandomAccessInput instead of seeking in Lucene90DocValuesProducer https://github.com/apache/lucene/pull/13894 Lazy initialize ForDeltaUtil and ForUtil in               Lucene912PostingsReader https://github.com/apache/lucene/pull/13885'),
+
+  ('2024-10-14',
+   'Dry up EverythingEnum and BlockDocsEnum in Lucene912PostingsReader https://github.com/apache/lucene/pull/13901',
+   'Dry up EverythingEnum and BlockDocsEnum in Lucene912PostingsReader https://github.com/apache/lucene/pull/13901'),
+
 ]

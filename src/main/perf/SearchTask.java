@@ -22,6 +22,7 @@ import org.apache.lucene.document.Document;
 import org.apache.lucene.facet.FacetResult;
 import org.apache.lucene.facet.Facets;
 import org.apache.lucene.facet.FacetsCollector;
+import org.apache.lucene.facet.FacetsCollectorManager;
 import org.apache.lucene.facet.range.LongRange;
 import org.apache.lucene.facet.range.LongRangeFacetCounts;
 import org.apache.lucene.facet.sortedset.SortedSetDocValuesFacetCounts;
@@ -241,8 +242,9 @@ final class SearchTask extends Task {
           getFacetResultsMsec = (System.nanoTime() - t0)/1000000.0;
         } else {
           facetResults = new ArrayList<FacetResult>();
-          FacetsCollector fc = new FacetsCollector();
-          hits = FacetsCollector.search(searcher, q, 10, fc);
+          FacetsCollectorManager.FacetsResult fr = FacetsCollectorManager.search(searcher, q, 10, new FacetsCollectorManager());
+          hits = fr.topDocs();
+          FacetsCollector fc = fr.facetsCollector();
           long t0 = System.nanoTime();
           for(String request : facetRequests) {
             if (request.startsWith("range:")) {
@@ -334,8 +336,7 @@ final class SearchTask extends Task {
             int segment = ReaderUtil.subIndex(doc, leaves);
             FloatVectorValues floatVectors = perLeafFloatVectors.get(segment);
             if (floatVectors != null) {
-              floatVectors.advance(doc - leaves.get(segment).docBase);
-              floatVectors.vectorValue();
+              floatVectors.vectorValue(doc - leaves.get(segment).docBase);
             }
           }
         }
@@ -356,7 +357,7 @@ final class SearchTask extends Task {
 
   private void hilite(TopGroups<?> groups, IndexState indexState, IndexSearcher searcher) throws IOException {
     for(GroupDocs<?> group : groups.groups) {
-      for(ScoreDoc sd : group.scoreDocs) {
+      for(ScoreDoc sd : group.scoreDocs()) {
         hilite(sd.doc, indexState, searcher);
       }
     }
@@ -497,15 +498,15 @@ final class SearchTask extends Task {
     if (group != null) {
       if (singlePassGroup) {
         for(GroupDocs<?> groupDocs : groupsResultBlock.groups) {
-          sum += groupDocs.totalHits.value;
-          for(ScoreDoc hit : groupDocs.scoreDocs) {
+          sum += groupDocs.totalHits().value();
+          for(ScoreDoc hit : groupDocs.scoreDocs()) {
             sum = sum * PRIME + hit.doc;
           }
         }
       } else {
         for(GroupDocs<BytesRef> groupDocs : groupsResultTerms.groups) {
-          sum += groupDocs.totalHits.value;
-          for(ScoreDoc hit : groupDocs.scoreDocs) {
+          sum += groupDocs.totalHits().value();
+          for(ScoreDoc hit : groupDocs.scoreDocs()) {
             sum = sum * PRIME + hit.doc;
             if (hit instanceof FieldDoc) {
               final FieldDoc fd = (FieldDoc) hit;
@@ -524,7 +525,7 @@ final class SearchTask extends Task {
       }
       sum = countOnlyCount;
     } else {
-      sum = hits.totalHits.value;
+      sum = hits.totalHits.value();
       for(ScoreDoc hit : hits.scoreDocs) {
         //System.out.println("  " + hit.doc);
         sum = sum * PRIME + hit.doc;
@@ -564,8 +565,8 @@ final class SearchTask extends Task {
         if (hits == null) {
           b.append("null");
         } else {
-          b.append(hits.totalHits.value);
-          if (hits.totalHits.relation == TotalHits.Relation.GREATER_THAN_OR_EQUAL_TO) {
+          b.append(hits.totalHits.value());
+          if (hits.totalHits.relation() == TotalHits.Relation.GREATER_THAN_OR_EQUAL_TO) {
             b.append('+');
           }
         }
@@ -603,15 +604,16 @@ final class SearchTask extends Task {
       if (group != null) {
         if (singlePassGroup) {
           for(GroupDocs<?> groupDocs : groupsResultBlock.groups) {
-            out.println("  group=null" + " totalHits=" + groupDocs.totalHits + " groupRelevance=" + groupDocs.groupSortValues[0]);
-            for(ScoreDoc hit : groupDocs.scoreDocs) {
+            out.println("  group=null" + " totalHits=" + groupDocs.totalHits() + " groupRelevance=" + groupDocs.groupSortValues()[0]);
+            for(ScoreDoc hit : groupDocs.scoreDocs()) {
               out.println("    doc=" + hit.doc + " score=" + hit.score);
             }
           }
         } else {
           for(GroupDocs<BytesRef> groupDocs : groupsResultTerms.groups) {
-            out.println("  group=" + (groupDocs.groupValue == null ? "null" : groupDocs.groupValue.utf8ToString().replace("\n", "\\n")) + " totalHits=" + groupDocs.totalHits + " groupRelevance=" + groupDocs.groupSortValues[0]);
-            for(ScoreDoc hit : groupDocs.scoreDocs) {
+            out.println("  group=" + (groupDocs.groupValue() == null ? "null" : groupDocs.groupValue().utf8ToString().replace("\n", "\\n"))
+                        + " totalHits=" + groupDocs.totalHits() + " groupRelevance=" + groupDocs.groupSortValues()[0]);
+            for(ScoreDoc hit : groupDocs.scoreDocs()) {
               out.println("    doc=" + hit.doc + " score=" + hit.score);
             }
           }
