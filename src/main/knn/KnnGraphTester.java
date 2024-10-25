@@ -51,6 +51,7 @@ import org.apache.lucene.codecs.lucene100.Lucene100Codec;
 import org.apache.lucene.codecs.lucene99.Lucene99HnswScalarQuantizedVectorsFormat;
 import org.apache.lucene.codecs.lucene101.Lucene101BinaryQuantizedVectorsFormat;
 import org.apache.lucene.codecs.lucene101.Lucene101HnswBinaryQuantizedVectorsFormat;
+import org.apache.lucene.codecs.lucene99.Lucene99HnswVectorsFormat;
 import org.apache.lucene.codecs.lucene99.Lucene99HnswVectorsReader;
 import org.apache.lucene.codecs.perfield.PerFieldKnnVectorsFormat;
 import org.apache.lucene.index.CodecReader;
@@ -142,12 +143,9 @@ public class KnnGraphTester {
   private float selectivity;
   private boolean prefilter;
   private boolean randomCommits;
-<<<<<<< HEAD
   private float overSample;
-=======
   private boolean parentJoin = false;
   private Path parentJoinMetaFile;
->>>>>>> upstream/main
 
   private KnnGraphTester() {
     // set defaults
@@ -452,7 +450,7 @@ public class KnnGraphTester {
     suffix.add(Integer.toString(beamWidth));
     if (quantize) {
       suffix.add(Integer.toString(quantizeBits));
-      if (quantizeCompress == true) {
+      if (quantizeCompress == true && quantizeBits == 4) {
         suffix.add("-compressed");
       }
     }
@@ -709,7 +707,7 @@ public class KnnGraphTester {
       }
       System.out.printf(
           Locale.ROOT,
-          "SUMMARY: %5.3f\t%5.3f\t%d\t%d\t%d\t%d\t%d\t%s\t%d\t%.2f\t%.2f\t%d\t%.2f\t%.2f\t%s\n",
+          "SUMMARY: %5.3f\t%5.3f\t%d\t%d\t%d\t%d\t%d\t%s\t%5.3f\t%d\t%.2f\t%.2f\t%d\t%.2f\t%.2f\t%s\n",
           recall,
           totalCpuTimeMS / (float) numIters,
           numDocs,
@@ -1040,15 +1038,21 @@ public class KnnGraphTester {
   }
 
   static Codec getCodec(int maxConn, int beamWidth, ExecutorService exec, int numMergeWorker, boolean quantize, int quantizeBits, boolean quantizeCompress) {
+    final boolean compress;
+    if (quantizeBits != 4) {
+      compress = false;
+    } else {
+      compress = quantizeCompress;
+    }
     if (exec == null) {
       return new Lucene100Codec() {
         @Override
         public KnnVectorsFormat getKnnVectorsFormatForField(String field) {
           if (quantize && quantizeBits != 32) {
             if (quantizeBits == 1) {
-              return new Lucene912HnswBinaryQuantizedVectorsFormat(maxConn, beamWidth);
+              return new Lucene101HnswBinaryQuantizedVectorsFormat(maxConn, beamWidth);
             }
-            return new Lucene99HnswScalarQuantizedVectorsFormat(maxConn, beamWidth, numMergeWorker, quantizeBits, quantizeCompress, 0f, null);
+            return new Lucene99HnswScalarQuantizedVectorsFormat(maxConn, beamWidth, numMergeWorker, quantizeBits, compress, 0f, null);
           }
           return new Lucene99HnswVectorsFormat(maxConn, beamWidth, numMergeWorker, null);
         }
@@ -1059,9 +1063,9 @@ public class KnnGraphTester {
         public KnnVectorsFormat getKnnVectorsFormatForField(String field) {
           if (quantize) {
             if (quantizeBits == 1 && quantizeBits != 32) {
-              return new Lucene912HnswBinaryQuantizedVectorsFormat(maxConn, beamWidth, numMergeWorker, exec);
+              return new Lucene101HnswBinaryQuantizedVectorsFormat(maxConn, beamWidth, numMergeWorker, exec);
             }
-            return new Lucene99HnswScalarQuantizedVectorsFormat(maxConn, beamWidth, numMergeWorker, quantizeBits, quantizeCompress, 0f, exec);
+            return new Lucene99HnswScalarQuantizedVectorsFormat(maxConn, beamWidth, numMergeWorker, quantizeBits, compress, 0f, exec);
           }
           return new Lucene99HnswVectorsFormat(maxConn, beamWidth, numMergeWorker, exec);
         }

@@ -45,24 +45,24 @@ PARAMS = {
     #'ndoc': (10000, 100000, 1000000),
     #'ndoc': (10000, 100000, 200000, 500000),
     #'ndoc': (10000, 100000, 200000, 500000),
-    'ndoc': (300_000,),
+    'ndoc': (500_000    ,),
     #'ndoc': (100000,),
     #'maxConn': (32, 64, 96),
     #'maxConn': (64, ),
     'maxConn': (16, ),
     #'beamWidthIndex': (250, 500),
     #'beamWidthIndex': (250, ),
-    'beamWidthIndex': (100, 150, 200, 250, 500),
+    'beamWidthIndex': (100, ),#150, 200, 250, 500),
     #'fanout': (20, 100, 250)
     #'quantize': None,
     'encoding': ('float32',),
     # 'metric': ('angular',),  # default is angular (dot_product)
     #'quantize': (True,),
-    'quantizeBits': (1, ),
-    'overSample': (1, 2, 3, 4, 5, 10),
+    'quantizeBits': (4,),
+    'overSample': (1, ), #1.5, 2, 3, 4, 5),
     #'fanout': (0,100,200),
     #'topK': (10,),
-    'niter': (100,),
+    #'niter': (100,),
 }
 
 def advance(ix, values):
@@ -98,13 +98,12 @@ def run_knn_benchmark(checkout, values):
     #query_vectors = '/d/electronics_query_vectors.bin'
 
     # Cohere dataset
-    dim = 768
-    doc_vectors = '%s/util/wiki768.train' % constants.BASE_DIR
-    query_vectors = '%s/util/wiki768.test' % constants.BASE_DIR
-    jfr = f"-agentpath:/Users/benjamintrent/Downloads/async-profiler-2.9-macos/build/libasyncProfiler.so=start,event=cpu,file=bbq-{dim}-10000-cpu.jfr"
+    dim = 384
+    doc_vectors = '%s/util/corpus-quora-E5-small.fvec.flat' % constants.BASE_DIR
+    query_vectors = '%s/util/queries-quora-E5-small.fvec.flat' % constants.BASE_DIR
     cp = benchUtil.classPathToString(benchUtil.getClassPath(checkout))
     cmd = constants.JAVA_EXE.split(' ') + ['-cp', cp,
-                                           '-Xmx16g', '-Xms16g',
+                                           '-Xmx4g', '-Xms4g',
            '--add-modules', 'jdk.incubator.vector',
            '--enable-native-access=ALL-UNNAMED',
            'knn.KnnGraphTester']
@@ -139,8 +138,9 @@ def run_knn_benchmark(checkout, values):
             '-dim', str(dim),
             '-docs', doc_vectors,
             '-reindex',
-            '-search-and-stats', query_vectors,
-            #'-metric', 'euclidean',
+            '-search', query_vectors,
+            '-metric', 'angular',
+            '-quantizeCompress',
             # '-parentJoin', parentJoin_meta_file,
             # '-numMergeThread', '8', '-numMergeWorker', '8',
             '-forceMerge',
@@ -167,7 +167,7 @@ def run_knn_benchmark(checkout, values):
         all_results.append(summary)
     print('\nResults:')
 
-    header = 'recall\tlatency (ms)\tnDoc\ttopK\tfanout\tmaxConn\tbeamWidth\tquantized\tvisited\tindex s\tforce merge s\tnum segments\tindex size (MB)\tselectivity\tfilterType'
+    header = 'recall\tlatency (ms)\tnDoc\ttopK\tfanout\tmaxConn\tbeamWidth\tquantized\toversample\tvisited\tindex s\tforce merge s\tnum segments\tindex size (MB)\tselectivity\tfilterType'
 
     # crazy logic to make everything fixed width so rendering in fixed width font "aligns":
     headers = header.split('\t')
