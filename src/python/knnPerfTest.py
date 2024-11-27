@@ -49,7 +49,7 @@ PARAMS = {
     #'ndoc': (100000,),
     #'maxConn': (32, 64, 96),
     #'maxConn': (64, ),
-    'maxConn': (16, ),
+    'maxConn': (32, ),
     #'beamWidthIndex': (250, 500),
     #'beamWidthIndex': (250, ),
     'beamWidthIndex': (100, ),#150, 200, 250, 500),
@@ -58,10 +58,11 @@ PARAMS = {
     'encoding': ('float32',),
     # 'metric': ('angular',),  # default is angular (dot_product)
     #'quantize': (True,),
-    'quantizeBits': (4,),
-    'overSample': (1, ), #1.5, 2, 3, 4, 5),
-    #'fanout': (0,100,200),
-    #'topK': (10,),
+    'quantizeBits': (1,4,7,32),
+    'overSample': (1, 1.5, 2, 3, 4, 5),
+    'fanout': (0,),
+    'topK': (100,),
+    'rerank': (False,True),
     #'niter': (100,),
 }
 
@@ -99,8 +100,8 @@ def run_knn_benchmark(checkout, values):
 
     # Cohere dataset
     dim = 384
-    doc_vectors = '%s/util/corpus-quora-E5-small.fvec.flat' % constants.BASE_DIR
-    query_vectors = '%s/util/queries-quora-E5-small.fvec.flat' % constants.BASE_DIR
+    doc_vectors = '%s/data/cohere-wikipedia-docs-768d.vec' % constants.BASE_DIR
+    query_vectors = '%s/data/cohere-wikipedia-queries-768d.vec' % constants.BASE_DIR
     cp = benchUtil.classPathToString(benchUtil.getClassPath(checkout))
     cmd = constants.JAVA_EXE.split(' ') + ['-cp', cp,
                                            '-Xmx4g', '-Xms4g',
@@ -167,7 +168,7 @@ def run_knn_benchmark(checkout, values):
         all_results.append(summary)
     print('\nResults:')
 
-    header = 'recall\tlatency (ms)\tnDoc\ttopK\tfanout\tmaxConn\tbeamWidth\tquantized\toversample\tvisited\tindex s\tforce merge s\tnum segments\tindex size (MB)\tselectivity\tfilterType'
+    header = 'recall\tlatency (ms)\tnDoc\ttopK\tfanout\tmaxConn\tbeamWidth\tquantized\toversample\tvisited\tindex s\tforce merge s\tnum segments\tindex size (MB)\tselectivity\tfilterType\trerank'
 
     # crazy logic to make everything fixed width so rendering in fixed width font "aligns":
     headers = header.split('\t')

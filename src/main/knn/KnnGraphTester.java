@@ -47,7 +47,7 @@ import java.util.concurrent.TimeUnit;
 import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.codecs.KnnVectorsFormat;
 import org.apache.lucene.codecs.KnnVectorsReader;
-import org.apache.lucene.codecs.lucene100.Lucene100Codec;
+import org.apache.lucene.codecs.lucene101.Lucene101Codec;
 import org.apache.lucene.codecs.lucene99.Lucene99HnswScalarQuantizedVectorsFormat;
 import org.apache.lucene.codecs.lucene101.Lucene101BinaryQuantizedVectorsFormat;
 import org.apache.lucene.codecs.lucene101.Lucene101HnswBinaryQuantizedVectorsFormat;
@@ -71,6 +71,7 @@ import org.apache.lucene.search.ConstantScoreWeight;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.KnnByteVectorQuery;
 import org.apache.lucene.search.KnnFloatVectorQuery;
+import org.apache.lucene.search.RerankKnnFloatVectorQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.QueryVisitor;
 import org.apache.lucene.search.ScoreDoc;
@@ -145,6 +146,7 @@ public class KnnGraphTester {
   private boolean randomCommits;
   private float overSample;
   private boolean parentJoin = false;
+  private boolean rerank = false;
   private Path parentJoinMetaFile;
 
   private KnnGraphTester() {
@@ -358,6 +360,9 @@ public class KnnGraphTester {
           if (numMergeThread <= 0) {
             throw new IllegalArgumentException("-numMergeThread should be >= 1");
           }
+          break;
+        case "-rerank":
+          rerank = true;
           break;
         case "-parentJoin":
           if (iarg == args.length - 1) {
@@ -624,9 +629,9 @@ public class KnnGraphTester {
             } else {
               float[] target = targetReader.next();
               if (prefilter) {
-                doKnnVectorQuery(searcher, KNN_FIELD, target, topK, fanout, bitSetQuery, parentJoin);
+                doKnnVectorQuery(searcher, KNN_FIELD, target, topK, fanout, bitSetQuery, parentJoin, this.topK, this.rerank);
               } else {
-                doKnnVectorQuery(searcher, KNN_FIELD, target, (int) (topK / selectivity), fanout, null, parentJoin);
+                doKnnVectorQuery(searcher, KNN_FIELD, target, (int) (topK / selectivity), fanout, null, parentJoin, this.topK, this.rerank);
               }
             }
           }
@@ -644,11 +649,11 @@ public class KnnGraphTester {
             } else {
               float[] target = targetReader.next();
               if (prefilter) {
-                results[i] = doKnnVectorQuery(searcher, KNN_FIELD, target, topK, fanout, bitSetQuery, parentJoin);
+                results[i] = doKnnVectorQuery(searcher, KNN_FIELD, target, topK, fanout, bitSetQuery, parentJoin, this.topK, this.rerank);
               } else {
                 results[i] =
                   doKnnVectorQuery(
-                    searcher, KNN_FIELD, target, (int) (topK / selectivity), fanout, null, parentJoin);
+                    searcher, KNN_FIELD, target, (int) (topK / selectivity), fanout, null, parentJoin, this.topK, this.rerank);
               }
               if (prefilter == false && matchDocs != null) {
                 results[i].scoreDocs =
@@ -707,7 +712,7 @@ public class KnnGraphTester {
       }
       System.out.printf(
           Locale.ROOT,
-          "SUMMARY: %5.3f\t%5.3f\t%d\t%d\t%d\t%d\t%d\t%s\t%5.3f\t%d\t%.2f\t%.2f\t%d\t%.2f\t%.2f\t%s\n",
+          "SUMMARY: %5.3f\t%5.3f\t%d\t%d\t%d\t%d\t%d\t%s\t%5.3f\t%d\t%.2f\t%.2f\t%d\t%.2f\t%.2f\t%s\t%s\n",
           recall,
           totalCpuTimeMS / (float) numIters,
           numDocs,
@@ -723,7 +728,8 @@ public class KnnGraphTester {
           indexNumSegments,
           indexSizeOnDiskMB,
           selectivity,
-          prefilter ? "pre-filter" : "post-filter");
+          prefilter ? "pre-filter" : "post-filter",
+	  rerank ? "True": "False");
     }
   }
 
@@ -744,15 +750,17 @@ public class KnnGraphTester {
   }
 
   private static TopDocs doKnnVectorQuery(
-      IndexSearcher searcher, String field, float[] vector, int k, int fanout, Query filter, boolean isParentJoinQuery)
+      IndexSearcher searcher, String field, float[] vector, int k, int fanout, Query filter, boolean isParentJoinQuery, int originalK, boolean rerank)
       throws IOException {
     if (isParentJoinQuery) {
       ParentJoinBenchmarkQuery parentJoinQuery = new ParentJoinBenchmarkQuery(vector, null, k);
       return searcher.search(parentJoinQuery, k);
     }
-    ProfiledKnnFloatVectorQuery profiledQuery = new ProfiledKnnFloatVectorQuery(field, vector, k, fanout, filter);
-    TopDocs docs = searcher.search(profiledQuery, k);
-    return new TopDocs(new TotalHits(profiledQuery.totalVectorCount(), docs.totalHits.relation()), docs.scoreDocs);
+    KnnFloatVectorQuery knnQuery = new ProfiledKnnFloatVectorQuery(field, vector, k, fanout, filter);
+    if (!rerank) {
+      return searcher.search(knnQuery, k);
+    }
+    return searcher.search(new RerankKnnFloatVectorQuery(knnQuery, vector, originalK), originalK);
   }
 
   private float checkResults(int[][] results, int[][] nn) {
@@ -1045,7 +1053,7 @@ public class KnnGraphTester {
       compress = quantizeCompress;
     }
     if (exec == null) {
-      return new Lucene100Codec() {
+      return new Lucene101Codec() {
         @Override
         public KnnVectorsFormat getKnnVectorsFormatForField(String field) {
           if (quantize && quantizeBits != 32) {
@@ -1058,7 +1066,7 @@ public class KnnGraphTester {
         }
       };
     } else {
-      return new Lucene100Codec() {
+      return new Lucene101Codec() {
         @Override
         public KnnVectorsFormat getKnnVectorsFormatForField(String field) {
           if (quantize) {
@@ -1136,7 +1144,6 @@ public class KnnGraphTester {
     long totalVectorCount() {
       return totalVectorCount;
     }
-
   }
 
   private static class BitSetQuery extends Query {
