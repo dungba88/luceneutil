@@ -758,7 +758,7 @@ public class KnnGraphTester {
     }
     KnnFloatVectorQuery knnQuery = new ProfiledKnnFloatVectorQuery(field, vector, k, fanout, filter);
     if (!rerank) {
-      return searcher.search(knnQuery, k);
+      return searcher.search(knnQuery, originalK);
     }
     return searcher.search(new RerankKnnFloatVectorQuery(knnQuery, vector, originalK), originalK);
   }

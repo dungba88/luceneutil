@@ -56,11 +56,11 @@ PARAMS = {
     #'fanout': (20, 100, 250)
     #'quantize': None,
     'encoding': ('float32',),
-    # 'metric': ('angular',),  # default is angular (dot_product)
+    'metric': ('mip',),  # default is angular (dot_product)
     #'quantize': (True,),
-    'quantizeBits': (1,4,7,32),
+    'quantizeBits': (1,32),
     'overSample': (1, 1.5, 2, 3, 4, 5),
-    'fanout': (0,),
+    'fanout': (0,100),
     'topK': (100,),
     'rerank': (False,True),
     #'niter': (100,),
@@ -99,7 +99,7 @@ def run_knn_benchmark(checkout, values):
     #query_vectors = '/d/electronics_query_vectors.bin'
 
     # Cohere dataset
-    dim = 384
+    dim = 768
     doc_vectors = '%s/data/cohere-wikipedia-docs-768d.vec' % constants.BASE_DIR
     query_vectors = '%s/data/cohere-wikipedia-queries-768d.vec' % constants.BASE_DIR
     cp = benchUtil.classPathToString(benchUtil.getClassPath(checkout))
